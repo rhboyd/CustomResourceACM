@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+    sam-app
+
+    Sample SAM Template for sam-app
+Parameters:
+  STAGE:
+    Type: String
+    Description: Stage for deployment.
+  DOMAIN:
+    Type: String
+    Description: Domain used for API
+
+Resources:
+    ACMRegisterFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: acm_register/
+            Handler: app.lambda_handler
+            Runtime: python3.7
+            Timeout: 900
+            Policies:
+              - Version: '2012-10-17'
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - acm:*
+                      - route53:*
+                      - lambda:Invoke*
+                    Resource: '*'
+    ACMCertificate:
+      Type: 'Custom::ACMCertificate'
+      Version: '1.0'
+      Properties:
+        ServiceToken: !GetAtt ACMRegisterFunction.Arn
+        Region: !Ref "AWS::Region"
+        HostedZoneName:
+          Fn::Join:
+            - "."
+            - - !Ref STAGE
+              - !Ref DOMAIN
+
+Outputs:
+    ACMCertArn:
+      Description: "ACM Certificate Arn"
+      Value: !GetAtt ACMCertificate.Arn
+      Export:
+        Name: "ACMCertArn"
