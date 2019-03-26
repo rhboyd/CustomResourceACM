@@ -1,7 +1,9 @@
-from __future__ import print_function
-from crhelper import CfnResource
 import logging
+import os
 import time
+
+import boto3
+from crhelper import CfnResource
 
 logger = logging.getLogger(__name__)
 helper = CfnResource(json_logging=False, log_level="DEBUG", boto_level="CRITICAL")
@@ -15,9 +17,8 @@ CAF = "CertificateArn"
 C = "Certificate"
 DVO = "DomainValidationOptions"
 
-
-@helper.poll_create
-def poll_create(event, context):
+@helper.create
+def create(event, context):
     acm = _client(event, "acm")
     hosted_zone = event[RP]["HostedZoneName"]
     record_name = event[RP].get("RecordName", None)
@@ -74,13 +75,32 @@ def poll_create(event, context):
             ]
         },
     )
-    validated = _await_validation(cert_arn, acm, context, event)
+    helper.Data.update({"Arn": cert_arn})
+
+    return
+
+
+@helper.poll_create
+def poll_create(event, context):
+    cert_arn = event['CrHelperData']['Arn']
+    acm = _client(event, "acm")
+    validated = _await_validation(cert_arn, acm)
     if validated:
-        helper.Data.update({"Arn": cert_arn})
         return True
 
-    # Will trigger again in two minutes to see if validation is finished
     return False
+
+
+# Need this stub function to prevent errors
+@helper.update
+def update(event, context):
+    logger.info("Got Update")
+
+
+# Need this stub function to prevent errors
+@helper.delete
+def delete(event, context):
+    logger.info("Got Delete")
 
 
 def handler(event, context):
@@ -103,7 +123,7 @@ def _client(event, client_type):
     return boto3.client(client_type, region_name=r)
 
 
-def _await_validation(arn, acm, context, event):
+def _await_validation(arn, acm):
     logger.info("Checking for validation.")
     resp = acm.list_certificates(CertificateStatuses=["ISSUED"])
     if any(cert[CAF] == arn for cert in resp["CertificateSummaryList"]):
