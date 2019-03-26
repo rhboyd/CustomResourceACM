@@ -1,23 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-    sam-app
-
-    Sample SAM Template for sam-app
-Parameters:
-  STAGE:
-    Type: String
-    Description: Stage for deployment.
-  DOMAIN:
-    Type: String
-    Description: Domain used for API
+Description: CloudFormation Custom Resource for provisioning and validating an ACM certificate.
 
 Resources:
     ACMRegisterFunction:
         Type: AWS::Serverless::Function
         Properties:
             CodeUri: acm_register/
-            Handler: app.lambda_handler
+            Handler: app.handler
             Runtime: python3.7
             Timeout: 900
             Policies:
@@ -25,25 +15,28 @@ Resources:
                 Statement:
                   - Effect: Allow
                     Action:
-                      - acm:*
-                      - route53:*
-                      - lambda:Invoke*
+                      - acm:RequestCertificate
+                      - acm:DescribeCertificate
+                      - acm:ListCertificates
                     Resource: '*'
-    ACMCertificate:
-      Type: 'Custom::ACMCertificate'
-      Version: '1.0'
-      Properties:
-        ServiceToken: !GetAtt ACMRegisterFunction.Arn
-        Region: !Ref "AWS::Region"
-        HostedZoneName:
-          Fn::Join:
-            - "."
-            - - !Ref STAGE
-              - !Ref DOMAIN
+                  - Effect: Allow
+                    Action:
+                      - route53:ChangeResourceRecordSets
+                      - route53:ListHostedZonesByName
+                    Resource: '*'
+                  - Effect: Allow
+                    Action:
+                      - lambda:AddPermission
+                      - lambda:RemovePermission
+                      - events:PutRule
+                      - events:DeleteRule
+                      - events:PutTargets
+                      - events:RemoveTargets
+                    Resource: '*'
 
 Outputs:
-    ACMCertArn:
-      Description: "ACM Certificate Arn"
-      Value: !GetAtt ACMCertificate.Arn
+    ACMRegisterFunction:
+      Description: "ARN for ACM Register custom resource function"
+      Value: !GetAtt ACMRegisterFunction.Arn
       Export:
-        Name: "ACMCertArn"
+        Name: "ACMRegisterFunction"
